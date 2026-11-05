@@ -1,0 +1,72 @@
+Browser History Collection
+==========================
+
+Run these commands in PowerShell from the CSIRT Tools folder.
+Set $output to the case's evidence directory.
+
+    $output = 'C:\Cases\IR-001'
+
+Run everything
+--------------
+
+    .\Invoke-BrowserHistory.ps1 -ComputerName 'WORKSTATION01' -OutputDirectory $output
+    .\Invoke-BrowserHistory.ps1 -ComputerName $env:COMPUTERNAME -OutputDirectory $output
+
+Use the first command for a remote target or the second for the local
+workstation. The script prints the collection folder and the paths to
+the JSON, CSV, and HTML report. If Python is installed outside PATH,
+pass -Python 'C:\Path\To\python.exe'. The master script also accepts
+-UsersRoot. The commands below run each stage separately.
+
+Local workstation
+-----------------
+
+    $collection = .\Collect-BrowserHistory.ps1 -OutputDirectory $output
+
+Remote workstation
+------------------
+
+    $collection = .\Collect-BrowserHistory.ps1 -ComputerName 'WORKSTATION01' -OutputDirectory $output
+
+Remote collection uses SMB and your current Windows credentials. Confirm
+you can list the target's admin share from your analyst workstation:
+
+    Get-ChildItem -LiteralPath '\\WORKSTATION01\C$\Users' -Directory
+
+For a different Windows users directory, pass its path with -UsersRoot.
+For a remote target, use a UNC path, for example '\\WORKSTATION01\D$\Users'.
+
+Export the collection
+---------------------
+
+    python .\parse_browser_history.py "$collection"
+
+In a new PowerShell session, replace "$collection" with the full path to
+the timestamped collection folder. Use Python 3.9 or newer. If Python
+reports missing Eastern time zone data, run:
+
+    python -m pip install tzdata
+
+The collection folder contains the original database copies and their
+SQLite sidecars, plus browser-history.json and browser-history.csv.
+Both exports are sorted by visit time and show Eastern time with the
+EST or EDT offset. The CSV opens in Excel.
+
+Visualize activity
+------------------
+
+    python .\visualize_browser_history.py (Join-Path $collection 'browser-history.json')
+
+Open browser-history-activity.html in the collection folder. Select a
+date to see its hourly visit counts. Use --output to choose a different
+HTML path. The report works offline and requires only standard Python.
+
+Check $LASTEXITCODE immediately after each script. A nonzero value means
+the run had an error. Review the console warnings before relying on the
+exports. If the parser can read only some profiles, it names its exports
+browser-history-partial.json and browser-history-partial.csv.
+
+The collector scans the standard Chrome and Edge data directories for
+each Windows user under the users root. Custom browser data locations
+require separate collection. Treat the databases and exports as case
+evidence because full URLs may contain sensitive information.
